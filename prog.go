@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-const cns = math.Pi / 4.0
+var cns = 1.0
 
 func errf(d dot) float64 {
-	v := K([]float64{d[0], d[1], 2.0}, []float64{d[2], d[3], d[4]}, 20).Actz(0.0)
+	v := K([]float64{d[0], d[2]}, []float64{d[1], 1.0}, 20).Actz(0.0)
 	return (v - cns) * (v - cns)
 }
 func intgerf(d dot) float64 {
@@ -27,7 +27,7 @@ func intgerf(d dot) float64 {
 }
 
 func newsfProg() surf {
-	return newgs2(dot{0.0, 0.0, 0.0, 0.0, 0.0}, 3, cord{10, 10, 10}, func(c cord) dot {
+	return newgs2(dot{0.0, 0.0, 0.0, 0.0, 0.0}, 3, cord{1, 1, 1}, func(c cord) dot {
 		d := make(dot, 5)
 		d[0] = -10.0
 		for i := 1; i < 3; i++ {
@@ -35,6 +35,32 @@ func newsfProg() surf {
 		}
 		return d
 	})
+}
+
+func newsfProg2() *growsurf {
+	d := make(dot, dotSize)
+	d[0] = -7.3
+	d[1] = 3.6
+	d[2] = 2.0
+	/*for i := range d {
+		d[i] = -1.5
+	}*/
+	for i := 0; i < 50000; i++ {
+		if i&(1<<14-1) == 0 {
+			log.Println("first dot is", d, "err", errf(d))
+		}
+		fall(d, errf, 0.01)
+	}
+	// log.Println("first dot is", d)
+	g := growsurf{
+		eps:     corStepEps,
+		ptr:     make(map[wcord]int),
+		pts:     []dot{d},
+		data:    []growsurfData{{c: make(cord, dotSize-1), p: getZplane(d, errf)}},
+		maxcord: runCords,
+	}
+	log.Println("base grwsf is", g)
+	return &g
 }
 
 const (
@@ -124,12 +150,16 @@ func prog(sf *surf) {
 	d := newdotptr(*sf, ierrf)
 	sort.Sort(d)
 	log.Println(d.a)
-	for i, j := range d.a[0:50] {
-		d0 := (*sf).dots()[j]
-		d1 := (*sf).dots()[d.a[i+1]]
-		if ierrf(d0) != ierrf(d1) {
-			log.Println(ierrf(d0), d0)
+	if len(d.a) > 50 {
+		for i, j := range d.a[0:50] {
+			d0 := (*sf).dots()[j]
+			d1 := (*sf).dots()[d.a[i+1]]
+			if ierrf(d0) != ierrf(d1) {
+				log.Println(ierrf(d0), d0)
+			}
 		}
+	} else {
+		fmt.Printf("136 -> prob")
 	}
 	fmt.Printf("\n\n>> end.\n\n\n")
 }
@@ -163,4 +193,38 @@ func newdotptr(sf surf, errf errfunc) dotptr {
 	d.sf = sf
 	d.errf = errf
 	return d
+}
+
+func prog2(gsf *growsurf) {
+	t0 := time.Now()
+	max := runCords.ctoi(runCords)
+	minusOne := make(cord, len(runCords))
+	for i := range minusOne {
+		minusOne[i] = -1
+	}
+	for i := 0; i < max; i++ {
+		if i == 0 {
+			continue
+		}
+		c := runCords.itoc(i)
+		gsf.addIn(abs0(addC(c, minusOne)), c, errf)
+	}
+	log.Println("end:", time.Now().Sub(t0))
+}
+
+func addC(a, b cord) (r cord) {
+	r = make(cord, len(a))
+	for i := range a {
+		r[i] = a[i] + b[i]
+	}
+	return
+}
+
+func abs0(c cord) cord {
+	for i, v := range c {
+		if v < 0 {
+			c[i] = 0
+		}
+	}
+	return c
 }

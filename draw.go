@@ -237,7 +237,7 @@ func (s *state) run(q *qruner) {
 			r.h.f = float32(q.c.getf())
 		}
 
-		if S.depth < q.maxDepth && q.c.chk() > eps2/4.0 {
+		if S.depth < q.maxDepth && q.c.chk() > epsDeg/4.0 {
 
 			r.gen = q.get(stat{
 				depth: S.depth + 10,
@@ -260,7 +260,7 @@ func (s *state) run(q *qruner) {
 					V[i] = float32(q.c.getf())
 					// log.Println("calc2", V[i], r.h.r, "stat=", d, S.depth, xi, yi)
 				}
-				if r.d < q.mind || dev(V) > eps2 {
+				if r.d < q.mind || dev(V) > epsDepth {
 					//log.Println("other")
 					bNil := r.h.ch == nil
 					if bNil {
@@ -332,7 +332,7 @@ func ncreate(d, mind, maxd int, f func(x, y float64) float64, r rectf, v float32
 		V[i] = float32(f(subi(i, r).mid()))
 	}
 
-	if d < mind || dev(V) > eps2 {
+	if d < mind || dev(V) > epsDepth {
 		for i := range q.ch {
 			//log.Println("subi(i, r) on", i, r, " => ", subi(i, r))
 			q.ch[i] = *ncreate(d+1, mind, maxd, f, subi(i, r), V[i])

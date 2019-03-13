@@ -50,6 +50,31 @@ func fall(d dot, err errfunc, step float64) {
 	}
 }
 
+func fall2(d dot, err errfunc, step float64) (e, drv float64) {
+	e0 := err(d)
+	el := make([]float64, len(d))
+	d2 := make([]float64, len(d))
+	for i := range d {
+		copy(d2, d)
+		d2[i] += drveps
+		el[i] = (err(d2) - e0) / drveps
+	}
+	size := 0.0
+	for i := range el {
+		size += el[i] * el[i]
+	}
+
+	//if size < step*step {
+	//	size = step
+	//} else {
+	size = math.Sqrt(size)
+	//}
+	for i := range d {
+		d[i] -= el[i] / size * step
+	}
+	return e0, size
+}
+
 func godrv(eps1, step float64, d []float64, err errfunc) []float64 {
 	e0 := err(d)
 	el := make([]float64, len(d))
@@ -125,8 +150,8 @@ type surf interface {
 	get(int) dot
 	set(int, dot)
 	neighbors(int) []int
-	//MRS ~ Max Triangle size
-	upt(MRS float64)
+	//MTS ~ Max Triangle size
+	// upt(MTS float64)
 	copy() surf
 }
 
@@ -252,6 +277,15 @@ func (s surface) itoc(i int) cord {
 		i /= j
 	}
 	return c
+}
+
+func (max cord) ctoi(c cord) (sum int) {
+	mul := 1
+	for i, v := range c {
+		sum += v * mul
+		mul *= max[i]
+	}
+	return
 }
 
 func push(s surface, step float64) {

@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"image/png"
 	"log"
 	"math"
 	"os"
@@ -70,16 +71,23 @@ func K(a, b []float64, N int) Mob {
 }
 
 const (
-	X0, X1, Y0, Y1 = -40.0, 20.0, -40.0, 20.0
-	Depth          = 3
+	//X0, X1, Y0, Y1 = -20.0, 10.0, -20.0, 10.0
+	X0, X1, Y0, Y1 = -30.0, 10.0, -20.0, 10.0
+	Depth          = 20
 	fallRatio      = 7
 	pstep          = 0.01
-	eps2           = 0.001
-	minD, maxD     = 3, 9
-	refrashRate    = 50
+	epsDepth       = 0.01
+	minD, maxD     = 5, 9
+	refrashRate    = 10
 
-	dotSize = 5
+	dotSize = 3
+
+	corStepEps = 0.05
 )
+
+var epsDeg = math.NaN()
+
+var runCords = cord{10, 10}
 
 type contfrac struct {
 	m    Mob
@@ -133,6 +141,10 @@ func (c *contfrac) chk() float64 {
 	// return 0.0
 }
 
+func (c *contfrac) String() string {
+	return fmt.Sprintf("cont - frac")
+}
+
 var _ calc = &contfrac{}
 
 var C = 1.0
@@ -144,7 +156,12 @@ type calc interface {
 }
 
 func main() {
-	log.Println(grmSchCS(vec{3.0, 4.0}))
+	/*gsf := &growsurf{maxcord: cord{100}, ptr: make(map[wcord]int)}
+	gsf.add(cord{0}, dot{1, 0}, plane{cs: cs{{0.707, 0.707}, {0.707, -0.707}}, v: dot{0.707, 0.707}, f: 1})
+	gsf.addO(cord{0}, cord{1}, dot{1 + 0.707, 0 - 0.707}, plane{cs: cs{{0.707, 0.70}, {-0.707, 0.70}}, v: dot{0.701, 0.7072}, f: 1.01})
+
+	return*/
+	/*log.Println(grmSchCS(vec{3.0, 4.0}))
 	log.Println(grmSchCS(vec{3.0, -4.0}))
 	log.Println(grmSchCS(vec{-3.0, 4.0}))
 	log.Println(grmSchCS(vec{-3.0, -4.0}))
@@ -154,7 +171,7 @@ func main() {
 	log.Println(grmSchCS(vec{0, +1}))
 	log.Println(grmSchCS(vec{0, -1}))
 
-	return
+	return*/
 	/*k := 1000
 	maxN := 10
 	r := 20000
@@ -215,8 +232,10 @@ func main() {
 		return
 	}
 
-	sf := newsfProg()
-	go prog(&sf)
+	g := newsfProg2()
+	go prog2(g)
+	sf := surf(g)
+	// go prog(&sf)
 
 	/*sf := newgs2(dot{0.0, 0.0}, 1, cord{1}, func(c cord) dot {
 		return make(dot, 2)
@@ -258,7 +277,7 @@ func main() {
 		f64 := float64(f) / C
 		speed := 10.0
 		b := 0.3
-		return color.RGBA{uint8(math.Tanh(f64/speed-b)*79.0 + 80), uint8(math.Tanh(-f64/speed+b)*127.0 + 128), uint8(255), 0}
+		return color.RGBA{uint8(math.Tanh(f64/speed-b)*79.0 + 80), uint8(math.Tanh(-f64/speed+b)*127.0 + 128), uint8(255), 255}
 	}
 
 	/*cf := func(f float64) color.Color {
@@ -269,11 +288,18 @@ func main() {
 		return color.RGBA{}
 	}*/
 
+	// printImg := image.Image(nil)
+	saveName := ""
 	pmod := 0
+	quit := make(chan struct{}, 1)
 	q := &qtree{r: rectf([4]float32{X0, Y0, X1, Y1})}
 	c := &contfrac{}
+	projString := `func(x, y float64) (a, b []float64) {
+		return []float64{x /* math.Abs(x)*/, 1.0}, []float64{y, 1.0}
+	}`
+	//SET PROJ
 	c.d.get().proj = func(x, y float64) (a, b []float64) {
-		return []float64{-10.0, y, 1.0}, []float64{x, 0.0, 1.0}
+		return []float64{x /* math.Abs(x)*/, 2.0}, []float64{y, 1.0}
 	}
 	runer := &qruner{mind: minD, maxd: maxD, maxDepth: 100, c: c, ptr: make(map[[2]int]ptrStat)}
 	runer.init()
@@ -311,9 +337,9 @@ func main() {
 				}
 				runer.mux.Lock()
 				C = f
-				// q.f = float32(math.NaN())
-				//runer.push(req{h: q, d: 0}, true)
-				// runer.wake()
+				/*q.f = float32(math.NaN())
+				runer.push(req{h: q, d: 0}, true)
+				runer.wake()*/
 				fmt.Println("C is equal", C)
 				runer.mux.Unlock()
 			} else if string(l[0:4]) == "rect" {
@@ -346,6 +372,24 @@ func main() {
 				}
 			} else if string(l[0:4]) == "mine" {
 				pmod = 2
+			} else if string(l[0:4]) == "exit" {
+				quit <- struct{}{}
+				return
+			} else if string(l[0:5]) == "save " {
+				saveName = string(l[5:])
+				/*f, err := os.Create(string(l[5:]))
+				if err != nil {
+					log.Println(err)
+				}
+				if err := png.Encode(f, printImg); err != nil {
+					f.Close()
+					log.Fatal(err)
+				}
+
+				if err := f.Close(); err != nil {
+					log.Fatal(err)
+				}*/
+
 			}
 			//refrash <- struct{}{}
 		}
@@ -360,12 +404,17 @@ func main() {
 		}
 		defer w.Release()
 
-		quit := make(chan struct{}, 1)
 		endWg := &sync.WaitGroup{}
 		sz := size.Event{}
 		run := false
 		//eLoop:
 		for {
+			if len(quit) > 0 {
+				log.Println("EXIT")
+				quit <- (<-quit)
+				endWg.Wait()
+				return
+			}
 			e := w.NextEvent()
 			switch e := e.(type) {
 			case lifecycle.Event:
@@ -400,8 +449,7 @@ func main() {
 					//log.Println("paint")
 					proj = stdProj(0, 1, float64(q.r[0]), float64(q.r[2]), float64(q.r[1]), float64(q.r[3]))
 					img := b0.RGBA()
-					draw.Draw(img, img.Bounds(), &image.Uniform{color.Black}, image.ZP, draw.Src)
-
+					draw.Draw(img, img.Bounds(), &image.Uniform{color.Black}, image.ZP, draw.Over)
 					runer.mux.Lock()
 					switch pmod {
 					case 1:
@@ -411,6 +459,34 @@ func main() {
 					}
 					runer.mux.Unlock()
 
+					// printImg = img
+
+					if saveName != "" {
+						img2 := image.NewRGBA(image.Rectangle{image.Point{0, 0}, image.Point{1000, 1000}})
+						qdrow(runer.max64gen, q, img2, cf)
+						f, err := os.Create(string(saveName) + ".png")
+						fdata, err := os.Create(string(saveName) + ".data")
+						if err != nil {
+							log.Fatal(err)
+						}
+						if err := png.Encode(f, img2); err != nil {
+							f.Close()
+							log.Fatal(err)
+						}
+
+						if err := f.Close(); err != nil {
+							log.Fatal(err)
+						}
+
+						fmt.Fprintln(fdata, "start")
+						fmt.Fprintln(fdata, "q:", q)
+						fmt.Fprintln(fdata, "contfrac:", c)
+						fmt.Fprintln(fdata, "proj:", projString)
+						fmt.Fprintln(fdata, "end:", "nil")
+
+						log.Println("save file")
+						saveName = ""
+					}
 					for i, d := range list {
 						if i == 0 {
 							continue
@@ -426,7 +502,7 @@ func main() {
 					for _, d := range sf.dots() {
 						pt := proj(d)
 						x, y := int(pt[0]*float64(szPt.X)), int(pt[1]*float64(szPt.Y))
-						drowCirc(img, x, y, 5, cfBtoR(math.Log(errf(d))))
+						drowCirc(img, x, y, 5, cfBtoR(math.Log(errf(d))+10.0))
 					}
 
 					for _, d := range plotP {
